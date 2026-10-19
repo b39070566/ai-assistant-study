@@ -6,7 +6,7 @@ window.STUDY_CONFIG = {
   mode: 'pretest',
 
   // 刺激物版本：修改 content.js 的對話或情境後改成 v2、v3…，資料裡的 version 欄會記錄受試者看到哪一版
-  version: 'v2',
+  version: 'v3',
 
   // Apps Script 網頁應用程式網址（部署後取得，結尾是 /exec）。
   // 留白時為「示範模式」：不送出任何資料，最後會顯示資料預覽，方便自己或老師試用。

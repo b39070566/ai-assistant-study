@@ -22,6 +22,9 @@
   --syn-comment: #6e7b85;
   --syn-number: #0b5cad;
   --changed: #fff6d6;
+  --hl-bg: #ffe8b3;       /* 情境句的強調色：兩組相同 */
+  --hl-ink: #8a3a00;
+  --glow: rgba(29, 107, 134, 0.35);
   --font-sans: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Cascadia Mono", Menlo, "Noto Sans Mono CJK TC", monospace;
   --radius: 10px;
@@ -196,7 +199,7 @@ textarea:focus, input[type="text"]:focus { outline: 3px solid var(--accent-soft)
 .workbench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 900px) { .workbench { grid-template-columns: minmax(0, 1fr); } }
 /* 寬螢幕：讀 AI 回覆時，程式碼固定在畫面上 */
-@media (min-width: 901px) { .editor { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 64px); } }
+@media (min-width: 901px) { .editor { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--topbar-h, 46px) + var(--taskbar-h, 0px) + 12px); } }
 
 .editor { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; min-width: 0; }
 .editor-head, .chat-head {
@@ -232,10 +235,14 @@ textarea:focus, input[type="text"]:focus { outline: 3px solid var(--accent-soft)
 .editor-actions { padding: 10px 14px; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .editor-actions .hint { color: var(--muted); font-size: 13px; }
 
-.chat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; min-width: 0; }
+.chat { background: var(--surface); border: 2px solid var(--accent); border-radius: var(--radius); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.chat .chat-head { background: var(--accent); color: var(--accent-ink); border-bottom: 0; padding: 10px 14px; }
+.chat-title { display: flex; flex-direction: column; line-height: 1.3; flex: 1; min-width: 0; }
+.chat-sub { font-size: 12px; opacity: 0.85; }
+.chat .chat-status { color: var(--accent-ink); background: rgba(255, 255, 255, 0.18); border-radius: 999px; padding: 1px 8px; }
 .avatar {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: var(--accent-soft); color: var(--accent);
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--surface); color: var(--accent);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono); font-size: 12px; font-weight: 700;
   flex: none;
@@ -244,14 +251,19 @@ textarea:focus, input[type="text"]:focus { outline: 3px solid var(--accent-soft)
 .chat-status { color: var(--ok); font-size: 12px; }
 .chat-log { padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; min-height: 260px; }
 .chat-empty { color: var(--muted); font-size: 14px; text-align: center; margin: auto 0; }
+.msg-row { display: flex; flex-direction: column; gap: 3px; }
+.msg-row.ai { align-items: flex-start; }
+.msg-row.user { align-items: flex-end; }
+.sender { font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 4px; }
+.msg-row.ai .sender { color: var(--accent); }
 .msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 15px; line-height: 1.7; word-break: break-word; }
-.msg.ai { align-self: flex-start; background: var(--ai-bubble); border-top-left-radius: 4px; }
-.msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-top-right-radius: 4px; }
+.msg.ai { background: var(--ai-bubble); border-top-left-radius: 4px; }
+.msg.user { background: var(--accent); color: var(--accent-ink); border-top-right-radius: 4px; }
 .msg.user code { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.35); color: var(--accent-ink); }
 .msg .attach { margin-top: 8px; background: var(--surface); color: var(--ink); border-radius: 8px; overflow-x: auto; }
 .msg .attach .code { padding: 8px 0; font-size: 12.5px; }
 .msg .attach .code .ln::before { width: 2.2em; }
-.typing { align-self: flex-start; background: var(--ai-bubble); border-radius: 14px; border-top-left-radius: 4px; padding: 12px 16px; display: flex; gap: 5px; }
+.typing { background: var(--ai-bubble); border-radius: 14px; border-top-left-radius: 4px; padding: 12px 16px; display: flex; gap: 5px; }
 .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: 0.4; animation: blink 1.2s infinite; }
 .typing i:nth-child(2) { animation-delay: 0.2s; }
 .typing i:nth-child(3) { animation-delay: 0.4s; }
@@ -280,6 +292,94 @@ textarea:focus, input[type="text"]:focus { outline: 3px solid var(--accent-soft)
   padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--code-bg);
 }
 .done-note { color: var(--ok); font-weight: 600; margin: 0; }
+
+/* 情境句的強調：兩組對應的關鍵資訊用同一種強調色 */
+mark.hl { background: var(--hl-bg); color: var(--hl-ink); font-weight: 700; padding: 0 3px; border-radius: 3px; }
+
+/* 任務步驟列與「下一步」提示：固定在頂端列下方 */
+.taskbar {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--topbar-h, 46px));
+  z-index: 4;
+  background: var(--bg);
+  padding-block: 8px 10px;
+  margin-bottom: 8px;
+}
+.stepper { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.stepper li {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px; line-height: 1.35;
+  min-width: 0;
+}
+.stepper .num {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--line); color: var(--ink); font-weight: 700; font-size: 12px;
+}
+.stepper li.current { border-color: var(--accent); color: var(--ink); font-weight: 700; background: var(--accent-soft); }
+.stepper li.current .num { background: var(--accent); color: var(--accent-ink); }
+.stepper li.done .num { background: var(--ok); color: #ffffff; }
+.next-step {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 15px;
+}
+.next-step.waiting { background: var(--accent-soft); color: var(--accent-strong); }
+
+/* 下一個要按的地方：外框光暈 */
+.next-action { box-shadow: 0 0 0 3px var(--glow); animation: glow 1.6s ease-in-out infinite; }
+.choices.next-action { border-radius: 12px; padding: 6px; }
+@keyframes glow { 0%, 100% { box-shadow: 0 0 0 3px var(--glow); } 50% { box-shadow: 0 0 0 7px rgba(29, 107, 134, 0.12); } }
+
+.editor-head .panel-label { font-weight: 700; font-size: 14px; }
+.editor-head .filename { text-align: right; }
+.console.empty { color: var(--muted); font-style: italic; }
+.hint.locked { color: var(--accent-strong); }
+.choices { display: flex; flex-direction: column; gap: 8px; }
+
+/* 「傳送」按鈕：訊息內容＋右側傳送標示 */
+.send {
+  appearance: none;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 15px; line-height: 1.6;
+}
+.send:hover { background: var(--accent-soft); }
+.send .send-text { flex: 1; min-width: 0; }
+.send .send-icon {
+  flex: none;
+  background: var(--accent); color: var(--accent-ink);
+  border-radius: 999px; padding: 4px 12px;
+  font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.send:disabled { opacity: 0.5; cursor: not-allowed; }
+.send:disabled .send-icon { background: var(--muted); }
+.send:focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 2px; }
+
+/* 手機：步驟列只顯示目前這一步的文字，其他步驟只留數字，減少佔用的高度 */
+@media (max-width: 600px) {
+  .stepper { display: flex; gap: 4px; margin-bottom: 6px; }
+  .stepper li { flex: none; padding: 4px 6px; font-size: 13px; }
+  .stepper li:not(.current) .step-text { display: none; }
+  .stepper li.current { flex: 1; }
+  .next-step { font-size: 14px; padding: 7px 12px; }
+}
 
 /* 事後說明與狀態列 */
 .banner { padding: 12px 16px; border-radius: var(--radius); font-size: 15px; }
@@ -322,5 +422,6 @@ details.preview pre { overflow-x: auto; font-size: 12px; line-height: 1.5; margi
 }
 @media (prefers-reduced-motion: reduce) {
   .typing i { animation: none; opacity: 0.6; }
+  .next-action { animation: none; }
   .progress > span { transition: none; }
 }

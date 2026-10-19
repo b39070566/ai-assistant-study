@@ -90,9 +90,10 @@
     const v = CFG.researcher && CFG.researcher[k];
     return v == null ? '{' + k + '}' : esc(v);
   }
-  // 純文字 → HTML：跳脫、代入 {…}、反引號變成程式碼字體
+  // 純文字 → HTML：跳脫、代入 {…}、反引號變成程式碼字體、**…** 變成強調色
   function rich(t) {
-    return esc(t).replace(/\{(\w+)\}/g, (m, k) => placeholder(k)).replace(/`([^`]+)`/g, '<code>$1</code>');
+    return esc(t).replace(/\{(\w+)\}/g, (m, k) => placeholder(k)).replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<mark class="hl">$1</mark>');   // **…** 顯示為強調色（兩組情境句對應位置相同）
   }
   function h(tag, attrs, children) {
     const el = document.createElement(tag);
@@ -301,7 +302,8 @@
     page.append(h('div', { class: 'panel' }, h('div', { class: 'stack' }, [
       h('p', { html: rich(b.lead) }),
       h('div', { class: 'scenario' }, h('p', { html: rich(b.base + b.criticality[crit()]) })),
-      h('p', { text: '接下來的畫面中，請依序：' }),
+      b.layout ? h('p', { html: rich(b.layout) }) : null,
+      h('p', { text: '接下來請依序：' }),
       h('ol', { class: 'steps' }, b.steps.map(s => h('li', { text: s }))),
     ])));
     const btn = h('button', { class: 'btn', type: 'button', id: 'start', text: b.start, disabled: true, onclick: () => { state.ts.brief_done = Date.now(); goNext(); } });
@@ -356,37 +358,57 @@
       h('p', { class: 'stance' }, [h('span', { class: 'label', text: T.stanceLabel }), ' ', h('span', { html: rich(T.stance) })]),
     ]));
 
+    // 步驟列與「下一步」提示：捲動時固定在畫面上方
+    const stepper = h('ol', { class: 'stepper', 'aria-label': '任務步驟' });
+    const guide = h('p', { class: 'next-step', role: 'status', 'aria-live': 'polite' });
+    page.append(h('div', { class: 'taskbar' }, [stepper, guide]));
+
     // 左：程式碼與測試
     const codeHost = h('div');
     const consoleEl = h('pre', { class: 'console', 'aria-live': 'polite' });
-    const runBtn = h('button', { class: 'btn secondary', type: 'button', id: 'run-tests', text: '▶ ' + T.runTests });
-    const editor = h('section', { class: 'editor', 'aria-label': '程式碼' }, [
-      h('div', { class: 'editor-head' }, [h('span', { class: 'filename', text: T.fileName })]),
+    const runBtn = h('button', { class: 'btn', type: 'button', id: 'run-tests', text: '▶ ' + T.runTests });
+    const editor = h('section', { class: 'editor', 'aria-label': '你的程式碼' }, [
+      h('div', { class: 'editor-head' }, [h('span', { class: 'panel-label', text: T.codeLabel }), h('span', { class: 'filename', text: T.fileName })]),
       codeHost,
       h('div', { class: 'editor-actions' }, [runBtn]),
       consoleEl,
     ]);
 
-    // 右：AI 助手
+    // 右：AI 對話視窗
     const log = h('div', { class: 'chat-log', 'aria-live': 'polite' });
     const compose = h('div', { class: 'compose' });
-    const chat = h('section', { class: 'chat', 'aria-label': T.assistantName }, [
-      h('div', { class: 'chat-head' }, [h('span', { class: 'avatar', text: 'AI', 'aria-hidden': 'true' }),
-        h('span', { class: 'chat-name', text: T.assistantName }), h('span', { class: 'chat-status', text: '● ' + T.assistantStatus })]),
+    const chat = h('section', { class: 'chat', 'aria-label': T.assistantName + '（' + T.assistantSub + '）' }, [
+      h('div', { class: 'chat-head' }, [
+        h('span', { class: 'avatar', 'aria-hidden': 'true', html: BOT_ICON }),
+        h('span', { class: 'chat-title' }, [h('span', { class: 'chat-name', text: T.assistantName }), h('span', { class: 'chat-sub', text: T.assistantSub })]),
+        h('span', { class: 'chat-status', text: '● ' + T.assistantStatus }),
+      ]),
       log, compose,
     ]);
     page.append(h('div', { class: 'workbench' }, [editor, chat]));
 
+    function drawGuide() {
+      const cur = [0, 1, 1, 2, 2, 3, 4][t.stage];       // 目前在第幾步；4 表示全部完成
+      stepper.innerHTML = '';
+      T.steps.forEach((s, i) => stepper.append(h('li', { class: i < cur ? 'done' : i === cur ? 'current' : '', 'aria-current': i === cur ? 'step' : null }, [
+        h('span', { class: 'num', text: i < cur ? '✓' : String(i + 1) }), h('span', { class: 'step-text', text: s })])));
+      guide.innerHTML = rich(T.guide[t.stage]);
+      guide.classList.toggle('waiting', t.stage === 2 || t.stage === 4);
+      runBtn.className = 'btn' + (t.stage === 0 ? ' next-action' : ' secondary');
+      syncSticky();
+    }
     function drawCode() { const c = codeLines(); codeHost.innerHTML = ''; codeHost.append(codeBlock(c.lines, c.changed)); }
     function drawConsole(running) {
-      if (!t.runs && !running) { consoleEl.textContent = ''; return; }
+      if (!t.runs && !running) { consoleEl.textContent = T.consoleEmpty; consoleEl.classList.add('empty'); return; }
+      consoleEl.classList.remove('empty');
       consoleEl.innerHTML = esc(T.testCommand) + '\n' + (running ? '…' : T.testLines.map(l =>
         '<span class="pass">' + (l.ok ? '✓' : '✗') + '</span> ' + esc(l.text)).join('\n') + '\n<span class="sum">' + esc(T.testSummary) + '</span>');
     }
-    function bubble(cls, html, withCode) {
-      const el = h('div', { class: 'msg ' + cls, html });
+    // 每則訊息上方標出是誰說的
+    function bubble(who, html, withCode) {
+      const el = h('div', { class: 'msg ' + who, html });
       if (withCode) el.append(h('div', { class: 'attach' }, codeBlock(T.code, -1)));
-      return el;
+      return h('div', { class: 'msg-row ' + who }, [h('span', { class: 'sender', text: who === 'ai' ? T.aiSender : T.userSender }), el]);
     }
     function drawChat() {
       log.innerHTML = '';
@@ -399,30 +421,44 @@
       if (t.stage === 4) { log.append(typing()); return; }
       log.append(bubble('ai', rich(T.ai2[syc()])));
     }
-    function typing() { return h('div', { class: 'typing', 'aria-label': 'AI 助手正在輸入' }, [h('i'), h('i'), h('i')]); }
-    function reveal() { compose.scrollIntoView({ block: 'nearest', behavior: REDUCED ? 'auto' : 'smooth' }); }
+    function typing() {
+      return h('div', { class: 'msg-row ai' }, [h('span', { class: 'sender', text: T.aiSender + ' 正在輸入…' }),
+        h('div', { class: 'typing', 'aria-label': 'AI 程式開發助手正在輸入' }, [h('i'), h('i'), h('i')])]);
+    }
+    // 把下一個要做的動作捲到看得到的地方（手機上程式碼和對話是上下排列）
+    function reveal() {
+      const target = page.querySelector('.next-action') || compose;
+      target.scrollIntoView({ block: 'center', behavior: REDUCED ? 'auto' : 'smooth' });
+    }
+    function sendButton(id, html, onclick, opts) {
+      return h('button', { class: 'send' + (opts && opts.next ? ' next-action' : ''), type: 'button', id, disabled: opts && opts.disabled, onclick }, [
+        h('span', { class: 'send-text', html }), h('span', { class: 'send-icon', text: T.sendLabel + ' ➤' })]);
+    }
 
     function drawCompose() {
       compose.innerHTML = '';
       if (t.stage <= 1) {
         compose.append(h('p', { class: 'hint', text: T.composeHint }));
-        compose.append(h('button', { class: 'chip', type: 'button', id: 'ask', disabled: t.stage < 1, html: rich(T.ask), onclick: ask }));
+        compose.append(sendButton('ask', rich(T.ask), ask, { disabled: t.stage < 1, next: t.stage === 1 }));
+        if (t.stage < 1) compose.append(h('p', { class: 'hint locked', text: T.askLocked }));
       } else if (t.stage === 2 || t.stage === 4) {
-        compose.append(h('p', { class: 'hint', text: 'AI 程式開發助手正在輸入…' }));
+        compose.append(h('p', { class: 'hint', text: T.aiSender + ' 正在輸入…' }));
       } else if (t.stage === 3) {
         compose.append(h('p', { class: 'prompt', text: T.pushbackPrompt }));
         const n = CFG.pushbackOptions === 1 ? 1 : T.pushbacks.length;
-        T.pushbacks.slice(0, n).forEach((p, i) => compose.append(h('button', { class: 'chip', type: 'button', id: 'push-' + (i + 1), html: rich(p), onclick: () => pushback(i + 1) })));
+        compose.append(h('div', { class: 'choices next-action' }, T.pushbacks.slice(0, n).map((p, i) =>
+          sendButton('push-' + (i + 1), rich(p), () => pushback(i + 1)))));
       } else if (t.stage === 5) {
         if (CFG.askDecision === false) {
-          compose.append(h('button', { class: 'btn', type: 'button', id: 'finish', text: T.next, onclick: () => decide('') }));
+          compose.append(h('button', { class: 'btn next-action', type: 'button', id: 'finish', text: T.next, onclick: () => decide('') }));
         } else {
           compose.append(h('p', { class: 'prompt', text: T.decisionPrompt }));
-          T.decisions.forEach(d => compose.append(h('button', { class: 'chip', type: 'button', id: 'decide-' + d.value, html: rich(d.label), onclick: () => d.value === 'edit' ? openEdit() : decide(d.value) })));
+          compose.append(h('div', { class: 'choices next-action' }, T.decisions.map(d =>
+            h('button', { class: 'chip', type: 'button', id: 'decide-' + d.value, html: rich(d.label), onclick: () => d.value === 'edit' ? openEdit() : decide(d.value) }))));
         }
       } else if (t.stage === 6) {
         compose.append(h('p', { class: 'done-note', text: T.decided }));
-        compose.append(h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', id: 'task-next', text: T.next, onclick: finish })));
+        compose.append(h('div', { class: 'actions' }, h('button', { class: 'btn next-action', type: 'button', id: 'task-next', text: T.next, onclick: finish })));
       }
     }
 
@@ -442,22 +478,21 @@
       input.focus();
     }
 
+    function redraw() { drawGuide(); drawChat(); drawCompose(); reveal(); }
     function ask() {
       if (t.stage !== 1) return;
-      t.ask = Date.now(); t.stage = 2; save();
-      drawChat(); drawCompose(); reveal();
-      later(() => { t.stage = 3; t.ai1 = Date.now(); save(); drawChat(); drawCompose(); reveal(); }, CFG.typingDelayMs || 0);
+      t.ask = Date.now(); t.stage = 2; save(); redraw();
+      later(() => { t.stage = 3; t.ai1 = Date.now(); save(); redraw(); }, CFG.typingDelayMs || 0);
     }
     function pushback(i) {
       if (t.stage !== 3) return;
-      t.pushback = i; t.push = Date.now(); t.stage = 4; save();
-      drawChat(); drawCompose(); reveal();
-      later(() => { t.stage = 5; t.ai2 = Date.now(); save(); drawChat(); drawCompose(); reveal(); }, CFG.typingDelayMs || 0);
+      t.pushback = i; t.push = Date.now(); t.stage = 4; save(); redraw();
+      later(() => { t.stage = 5; t.ai2 = Date.now(); save(); redraw(); }, CFG.typingDelayMs || 0);
     }
     function decide(v) {
       if (t.stage !== 5) return;
       t.decision = v; t.decide = Date.now(); t.stage = 6; save();
-      drawCode(); drawCompose(); reveal();
+      drawCode(); redraw();
     }
     function finish() {
       state.ts.task_done = Date.now();
@@ -471,16 +506,30 @@
       later(() => {
         t.runs = (t.runs || 0) + 1;
         if (!t.tests) t.tests = Date.now();
-        if (t.stage === 0) t.stage = 1;
+        const first = t.stage === 0;
+        if (first) t.stage = 1;
         save();
         drawConsole(false);
         runBtn.disabled = false;
-        if (t.stage <= 1) drawCompose();
+        if (first) redraw();
       }, 700);
     });
 
-    drawCode(); drawConsole(false); drawChat(); drawCompose();
+    drawGuide(); drawCode(); drawConsole(false); drawChat(); drawCompose();
   }
+
+  // 固定在上方的元素（頂端列、任務步驟列、程式碼面板）依實際高度排好，不互相遮住
+  function syncSticky() {
+    const top = document.querySelector('.topbar'), bar = document.querySelector('.taskbar');
+    const rs = document.documentElement.style;
+    rs.setProperty('--topbar-h', (top ? top.offsetHeight : 0) + 'px');
+    rs.setProperty('--taskbar-h', (bar ? bar.offsetHeight : 0) + 'px');
+  }
+  window.addEventListener('resize', syncSticky);
+
+  const BOT_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4.5"/><circle cx="12" cy="3.5" r="1"/><circle cx="9" cy="13.5" r="1.2" fill="currentColor"/>' +
+    '<circle cx="15" cy="13.5" r="1.2" fill="currentColor"/><path d="M2 12.5v3M22 12.5v3"/></svg>';
 
   // ---------------------------------------------------------------- 送出與事後說明
   function sec(ms) { return ms == null || isNaN(ms) ? '' : Math.round(ms / 100) / 10; }
