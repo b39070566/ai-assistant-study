@@ -10,14 +10,14 @@ window.STUDY_CONFIG = {
 
   // Apps Script 網頁應用程式網址（部署後取得，結尾是 /exec）。
   // 留白時為「示範模式」：不送出任何資料，最後會顯示資料預覽，方便自己或老師試用。
-  endpoint: '',
+  endpoint: 'https://script.google.com/macros/s/AKfycbxYSELUDq5uAVjJwoJt35lvAwNU4STwnXp1fb3hPZ6bF2--cpUEMDrhCDIHrJBWp066qA/exec',
 
   // 知情同意與事後說明中會出現的資料
   researcher: {
-    school: '（學校、系所）',
-    name: '（姓名）',
-    email: '（Email）',
-    deadline: '（日期）',   // 撤回資料的期限
+    school: '中山大學資訊管理所',
+    name: '吉彥安',
+    email: 'b39070566@gmail.com',
+    deadline: '2026/12/31',   // 撤回資料的期限
   },
 
   // 抽獎登記表單網址（另一份 Google 表單，與作答資料分開）；留白則不顯示
